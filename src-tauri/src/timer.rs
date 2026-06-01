@@ -151,8 +151,8 @@ impl TimerEngine {
                         s.phase = next_phase;
                         s.total_duration_sec = next_duration;
                         s.remaining_sec = next_duration;
-                        // Auto-start next session
-                        s.status = Status::Running;
+                        // Stop and wait for manual start
+                        s.status = Status::Stopped;
                     } else {
                         s.remaining_sec -= secs_elapsed;
                     }

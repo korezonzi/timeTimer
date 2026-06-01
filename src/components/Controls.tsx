@@ -1,7 +1,7 @@
 import { useTimerStore } from "../stores/timerStore";
 
 export function Controls() {
-  const { state, toggle, reset, skip, toggleSettings, windowWidth } =
+  const { state, toggle, reset, skip, toggleSettings, toggleMute, muted, windowWidth } =
     useTimerStore();
 
   if (windowWidth < 120) return null;
@@ -17,48 +17,62 @@ export function Controls() {
         left: "50%",
         transform: "translate(-50%, -50%)",
         display: "flex",
-        gap: 4,
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 6,
         opacity: 0,
         transition: "opacity 0.2s",
         pointerEvents: "none",
       }}
       className="controls-overlay"
     >
-      {!isStopped && (
-        <button onClick={reset} style={buttonStyle} title="Reset (R)">
-          ↺
-        </button>
-      )}
+      {/* Main toggle button — large */}
       <button
         onClick={toggle}
-        style={{ ...buttonStyle, fontSize: 18 }}
+        style={mainButtonStyle}
         title="Start/Pause (Space)"
       >
         {isRunning ? "⏸" : "▶"}
       </button>
-      {!isStopped && (
-        <button onClick={skip} style={buttonStyle} title="Skip (S)">
-          ⏭
+
+      {/* Secondary buttons — small row below */}
+      <div style={{ display: "flex", gap: 4 }}>
+        {!isStopped && (
+          <button onClick={reset} style={subButtonStyle} title="Reset (R)">
+            ↺
+          </button>
+        )}
+        {!isStopped && (
+          <button onClick={skip} style={subButtonStyle} title="Skip (S)">
+            ⏭
+          </button>
+        )}
+        <button
+          onClick={toggleMute}
+          style={{
+            ...subButtonStyle,
+            opacity: muted ? 0.5 : 1,
+          }}
+          title="Mute (M)"
+        >
+          {muted ? "🔇" : "🔔"}
         </button>
-      )}
-      <button
-        onClick={toggleSettings}
-        style={buttonStyle}
-        title="Settings (⌘,)"
-      >
-        ⚙
-      </button>
+        <button
+          onClick={toggleSettings}
+          style={subButtonStyle}
+          title="Settings (⌘,)"
+        >
+          ⚙
+        </button>
+      </div>
     </div>
   );
 }
 
-const buttonStyle: React.CSSProperties = {
+const baseStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.15)",
   border: "none",
   borderRadius: "50%",
-  width: 32,
-  height: 32,
-  fontSize: 14,
   color: "white",
   cursor: "pointer",
   display: "flex",
@@ -66,4 +80,18 @@ const buttonStyle: React.CSSProperties = {
   justifyContent: "center",
   pointerEvents: "auto",
   backdropFilter: "blur(4px)",
+};
+
+const mainButtonStyle: React.CSSProperties = {
+  ...baseStyle,
+  width: 48,
+  height: 48,
+  fontSize: 22,
+};
+
+const subButtonStyle: React.CSSProperties = {
+  ...baseStyle,
+  width: 26,
+  height: 26,
+  fontSize: 12,
 };

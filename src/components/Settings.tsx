@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTimerStore } from "../stores/timerStore";
 import { DEFAULT_PRESETS } from "../types/timer";
 import type { Preset } from "../types/timer";
+import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { getRecentStats, type DailyRecord } from "../lib/stats";
 
 export function Settings() {
   const { showSettings, toggleSettings, activePreset, changePreset, state, setSessionsGoal } =
@@ -9,6 +11,15 @@ export function Settings() {
   const [customMinutes, setCustomMinutes] = useState("");
   const [customBreak, setCustomBreak] = useState("");
   const [goalInput, setGoalInput] = useState(String(state.sessionsGoal));
+  const [autoStart, setAutoStart] = useState(false);
+  const [stats, setStats] = useState<DailyRecord[]>([]);
+
+  useEffect(() => {
+    if (showSettings) {
+      isEnabled().then(setAutoStart).catch(() => {});
+      getRecentStats(7).then(setStats).catch(() => {});
+    }
+  }, [showSettings]);
 
   if (!showSettings) return null;
 
@@ -115,6 +126,58 @@ export function Settings() {
           Set
         </button>
       </div>
+
+      <div
+        style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 2 }}
+      >
+        <span style={{ fontSize: 10 }}>Auto-start:</span>
+        <button
+          onClick={async () => {
+            if (autoStart) {
+              await disable();
+              setAutoStart(false);
+            } else {
+              await enable();
+              setAutoStart(true);
+            }
+          }}
+          style={{
+            ...smallButtonStyle,
+            background: autoStart
+              ? "rgba(34,197,94,0.3)"
+              : "rgba(255,255,255,0.1)",
+          }}
+        >
+          {autoStart ? "ON" : "OFF"}
+        </button>
+      </div>
+
+      {/* Weekly stats mini chart */}
+      {stats.length > 0 && (
+        <div style={{ marginTop: 4, width: "80%" }}>
+          <div style={{ fontSize: 9, opacity: 0.6, marginBottom: 2, textAlign: "center" }}>
+            7-day Focus
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 24, justifyContent: "center" }}>
+            {stats.map((day) => {
+              const maxMin = Math.max(...stats.map((d) => d.focusTimeSec / 60), 1);
+              const h = Math.max(2, (day.focusTimeSec / 60 / maxMin) * 20);
+              return (
+                <div
+                  key={day.date}
+                  title={`${day.date}: ${Math.round(day.focusTimeSec / 60)}min / ${day.completedSessions} sessions`}
+                  style={{
+                    width: 8,
+                    height: h,
+                    background: "rgba(34,197,94,0.6)",
+                    borderRadius: 2,
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <button
         onClick={toggleSettings}

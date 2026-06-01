@@ -2,7 +2,7 @@ import { describeArc } from "../lib/arc";
 import { formatTime, formatFocusTime } from "../lib/format";
 import { useTimerStore } from "../stores/timerStore";
 import type { Phase } from "../types/timer";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 const PHASE_COLORS: Record<Phase, string> = {
   idle: "#6b7280",
@@ -25,8 +25,11 @@ const RING_WIDTH = 8;
 
 export function TimerDial() {
   const { state, windowWidth } = useTimerStore();
-  const { phase, totalDurationSec, remainingSec } = state;
+  const { phase, status, totalDurationSec, remainingSec } = state;
   const [currentTime, setCurrentTime] = useState(formatCurrentTime());
+  const [smoothAngle, setSmoothAngle] = useState(360);
+  const rafRef = useRef<number>(0);
+  const lastFrameRef = useRef<number>(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -35,8 +38,46 @@ export function TimerDial() {
     return () => clearInterval(interval);
   }, []);
 
-  const progress = totalDurationSec > 0 ? remainingSec / totalDurationSec : 1;
-  const angle = progress * 360;
+  // Target angle from Rust state
+  const targetAngle = totalDurationSec > 0 ? (remainingSec / totalDurationSec) * 360 : 360;
+
+  // Smooth animation loop — interpolate toward target while running
+  const animate = useCallback(
+    (timestamp: number) => {
+      if (!lastFrameRef.current) {
+        lastFrameRef.current = timestamp;
+      }
+      const dt = (timestamp - lastFrameRef.current) / 1000;
+      lastFrameRef.current = timestamp;
+
+      setSmoothAngle((prev) => {
+        if (status !== "running") return targetAngle;
+
+        // Decrease at the rate of one full rotation per totalDurationSec
+        const rate = totalDurationSec > 0 ? 360 / totalDurationSec : 0;
+        const next = prev - rate * dt;
+
+        // Snap if we overshot or drifted too far from target
+        if (Math.abs(next - targetAngle) > 10) return targetAngle;
+        return Math.max(0, next);
+      });
+
+      rafRef.current = requestAnimationFrame(animate);
+    },
+    [status, targetAngle, totalDurationSec],
+  );
+
+  useEffect(() => {
+    if (status === "running") {
+      lastFrameRef.current = 0;
+      rafRef.current = requestAnimationFrame(animate);
+    } else {
+      setSmoothAngle(targetAngle);
+    }
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [status, animate, targetAngle]);
+
+  const angle = smoothAngle;
   const isCompact = windowWidth < 96;
 
   const sectorColor = PHASE_COLORS[phase];
@@ -54,12 +95,12 @@ export function TimerDial() {
       viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
       style={{ width: "100%", height: "100%", pointerEvents: "none" }}
     >
-      {/* Background circle */}
-      <circle cx={CENTER} cy={CENTER} r={RADIUS} fill={bgColor} />
+      {/* Background circle — semi-transparent */}
+      <circle cx={CENTER} cy={CENTER} r={RADIUS} fill={bgColor} opacity={0.55} />
 
-      {/* Timer sector */}
+      {/* Timer sector — semi-transparent */}
       {angle > 0 && (
-        <path d={sectorPath} fill={sectorColor} opacity={0.85} />
+        <path d={sectorPath} fill={sectorColor} opacity={0.5} />
       )}
 
       {/* Outer ring */}
@@ -70,7 +111,7 @@ export function TimerDial() {
         fill="none"
         stroke={sectorColor}
         strokeWidth={RING_WIDTH}
-        opacity={0.3}
+        opacity={0.25}
       />
 
       {/* Center text group - hidden on hover via CSS, hidden when compact */}

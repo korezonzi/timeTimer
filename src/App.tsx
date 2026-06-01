@@ -1,9 +1,11 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { TimerDial } from "./components/TimerDial";
 import { Controls } from "./components/Controls";
 import { Settings } from "./components/Settings";
 import { useTimerStore } from "./stores/timerStore";
 import { onTimerTick, onTimerCompleted } from "./lib/tauri-bridge";
+import { playTick, playBell } from "./lib/sound";
+import { recordSessionComplete } from "./lib/stats";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   isRegistered,
@@ -17,7 +19,7 @@ import {
 import "./App.css";
 
 export default function App() {
-  const { syncState, updateState, toggle, reset, skip, toggleSettings, setWindowWidth } =
+  const { syncState, updateState, toggle, reset, skip, toggleSettings, toggleMute, setWindowWidth } =
     useTimerStore();
 
   // Sync initial state from Rust
@@ -25,15 +27,39 @@ export default function App() {
     syncState();
   }, [syncState]);
 
-  // Listen for tick events from Rust
+  // Listen for tick events from Rust — play countdown sounds
+  const prevRemainingRef = useRef<number | null>(null);
+
   useEffect(() => {
     const unlistenTick = onTimerTick((state) => {
       updateState(state);
+
+      const muted = useTimerStore.getState().muted;
+      if (!muted && state.status === "running") {
+        // Tick sound for last 5 seconds
+        if (state.remainingSec > 0 && state.remainingSec <= 5) {
+          const prev = prevRemainingRef.current;
+          if (prev === null || prev !== state.remainingSec) {
+            playTick();
+          }
+        }
+      }
+      prevRemainingRef.current = state.remainingSec;
     });
     const unlistenComplete = onTimerCompleted((phase) => {
+      const muted = useTimerStore.getState().muted;
+      if (!muted) {
+        playBell();
+      }
       const phaseLabel =
         phase === "work" ? "Focus session" : phase === "break" ? "Break" : "Long break";
       sendNotificationSafe(`${phaseLabel} complete!`);
+
+      // Record focus session stats
+      if (phase === "work") {
+        const { activePreset } = useTimerStore.getState();
+        recordSessionComplete(activePreset.workDurationSec);
+      }
     });
     return () => {
       unlistenTick.then((fn) => fn());
@@ -69,6 +95,10 @@ export default function App() {
         case "S":
           skip();
           break;
+        case "m":
+        case "M":
+          toggleMute();
+          break;
         case ",":
           if (e.metaKey) {
             e.preventDefault();
@@ -77,7 +107,7 @@ export default function App() {
           break;
       }
     },
-    [toggle, reset, skip, toggleSettings],
+    [toggle, reset, skip, toggleSettings, toggleMute],
   );
 
   useEffect(() => {
