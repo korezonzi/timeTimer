@@ -4,7 +4,7 @@ import { Controls } from "./components/Controls";
 import { Settings } from "./components/Settings";
 import { useTimerStore } from "./stores/timerStore";
 import { onTimerTick, onTimerCompleted } from "./lib/tauri-bridge";
-import { playTick, playBell } from "./lib/sound";
+import { playTick, playBell, playStart, playPause } from "./lib/sound";
 import { recordSessionComplete } from "./lib/stats";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -19,8 +19,23 @@ import {
 import "./App.css";
 
 export default function App() {
-  const { syncState, updateState, toggle, reset, skip, toggleSettings, toggleMute, setWindowWidth } =
+  const { syncState, updateState, toggle: rawToggle, reset, skip, toggleSettings, toggleMute, setWindowWidth } =
     useTimerStore();
+
+  // Wrap toggle with operation sounds
+  const toggle = useCallback(async () => {
+    const { status } = useTimerStore.getState().state;
+    const muted = useTimerStore.getState().muted;
+    await rawToggle();
+    if (!muted) {
+      // Was running → now paused, was paused/stopped → now running
+      if (status === "running") {
+        playPause();
+      } else {
+        playStart();
+      }
+    }
+  }, [rawToggle]);
 
   // Sync initial state from Rust
   useEffect(() => {
@@ -139,25 +154,18 @@ export default function App() {
 
 async function registerGlobalShortcuts(
   toggle: () => Promise<void>,
-  reset: () => Promise<void>,
-  skip: () => Promise<void>,
+  _reset: () => Promise<void>,
+  _skip: () => Promise<void>,
 ) {
   try {
-    const shortcuts: Array<{ keys: string; handler: () => void }> = [
-      { keys: "Ctrl+Shift+Space", handler: toggle },
-      { keys: "Ctrl+Shift+KeyR", handler: reset },
-      { keys: "Ctrl+Shift+KeyS", handler: skip },
-    ];
-
-    for (const { keys, handler } of shortcuts) {
-      const registered = await isRegistered(keys);
-      if (!registered) {
-        await register(keys, (event) => {
-          if (event.state === "Pressed") {
-            handler();
-          }
-        });
-      }
+    const keys = "Alt+Super+KeyT";
+    const registered = await isRegistered(keys);
+    if (!registered) {
+      await register(keys, (event) => {
+        if (event.state === "Pressed") {
+          toggle();
+        }
+      });
     }
   } catch (err) {
     console.warn("Failed to register global shortcuts:", err);

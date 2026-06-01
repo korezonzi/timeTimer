@@ -17,6 +17,9 @@ html, body, #root {
   position: relative;
   border-radius: 50%;
   overflow: hidden;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Show controls on hover, hide timer text */
