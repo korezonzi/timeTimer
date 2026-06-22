@@ -3,6 +3,7 @@ import { load, type Store } from "@tauri-apps/plugin-store";
 import type { TimerState, Preset } from "../types/timer";
 import { DEFAULT_PRESETS } from "../types/timer";
 import * as bridge from "../lib/tauri-bridge";
+import { playStart, playPause } from "../lib/sound";
 
 const STORE_KEY = "settings";
 
@@ -102,6 +103,15 @@ export const useTimerStore = create<TimerStore>((set, get) => ({
   toggle: async () => {
     const state = await bridge.toggleTimer();
     set({ state });
+
+    // Cue sounds here so every entry point (button, keyboard, global shortcut)
+    // sounds consistently.
+    if (get().muted) return;
+    if (state.status === "running") {
+      playStart();
+    } else if (state.status === "paused") {
+      playPause();
+    }
   },
 
   reset: async () => {

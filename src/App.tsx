@@ -4,7 +4,7 @@ import { Controls } from "./components/Controls";
 import { Settings } from "./components/Settings";
 import { useTimerStore } from "./stores/timerStore";
 import { onTimerTick, onTimerCompleted } from "./lib/tauri-bridge";
-import { playTick, playBell, playStart, playPause, unlockAudio } from "./lib/sound";
+import { playTick, playBell, unlockAudio } from "./lib/sound";
 import { recordSessionComplete } from "./lib/stats";
 import { checkDailyReset } from "./lib/dailyReset";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -20,23 +20,8 @@ import {
 import "./App.css";
 
 export default function App() {
-  const { syncState, updateState, toggle: rawToggle, reset, skip, toggleSettings, toggleMute, setWindowWidth } =
+  const { syncState, updateState, toggle, reset, skip, toggleSettings, toggleMute, setWindowWidth } =
     useTimerStore();
-
-  // Wrap toggle with operation sounds
-  const toggle = useCallback(async () => {
-    const { status } = useTimerStore.getState().state;
-    const muted = useTimerStore.getState().muted;
-    await rawToggle();
-    if (!muted) {
-      // Was running → now paused, was paused/stopped → now running
-      if (status === "running") {
-        playPause();
-      } else {
-        playStart();
-      }
-    }
-  }, [rawToggle]);
 
   // Sync initial state from Rust
   useEffect(() => {
